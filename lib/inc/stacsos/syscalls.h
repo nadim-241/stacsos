@@ -28,7 +28,8 @@ enum class syscall_numbers {
 	join_thread = 14,
 	sleep = 15,
 	poweroff = 16,
-	ioctl = 17
+	ioctl = 17,
+	stat = 18
 };
 
 struct syscall_result {
@@ -36,4 +37,9 @@ struct syscall_result {
 	u64 data;
 } __packed;
 
+struct stat_result {
+	char name[1024];
+	u64 size_or_count;
+	u64 kind;
+} __packed;
 } // namespace stacsos

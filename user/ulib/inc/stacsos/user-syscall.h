@@ -69,6 +69,10 @@ public:
 		auto r = syscall4(syscall_numbers::ioctl, object, cmd, (u64)buffer, length);
 		return rw_result { r.code, r.data };
 	}
+	
+	static syscall_result stat(stat_result *buffer, bool dir_info, const char *path) {
+		return syscall3(syscall_numbers::stat, (u64)buffer, (u64)path, (u64)&dir_info);
+	}
 
 	static alloc_result alloc_mem(u64 size)
 	{
