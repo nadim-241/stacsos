@@ -71,7 +71,7 @@ public:
 	}
 	
 	static syscall_result stat(stat_result *buffer, bool dir_info, const char *path) {
-		return syscall3(syscall_numbers::stat, (u64)buffer, (u64)path, (u64)&dir_info);
+		return syscall3(syscall_numbers::stat, (u64)buffer, (u64)path, (u64)dir_info);
 	}
 
 	static alloc_result alloc_mem(u64 size)

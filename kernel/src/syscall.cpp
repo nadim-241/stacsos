@@ -8,8 +8,8 @@
 #include <stacsos/kernel/arch/x86/cregs.h>
 #include <stacsos/kernel/arch/x86/pio.h>
 #include <stacsos/kernel/debug.h>
-#include <stacsos/kernel/fs/vfs.h>
 #include <stacsos/kernel/fs/tar-filesystem.h>
+#include <stacsos/kernel/fs/vfs.h>
 #include <stacsos/kernel/mem/address-space.h>
 #include <stacsos/kernel/obj/object-manager.h>
 #include <stacsos/kernel/obj/object.h>
@@ -18,7 +18,6 @@
 #include <stacsos/kernel/sched/sleeper.h>
 #include <stacsos/kernel/sched/thread.h>
 #include <stacsos/syscalls.h>
-#include <stacsos/kernel/debug.h>
 
 using namespace stacsos;
 using namespace stacsos::kernel;
@@ -114,40 +113,53 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 	}
 
 	case syscall_numbers::stat: {
-		dprintf("Stat called\n");
+		// Cast argument pointers back from u64
 		bool dir_info = (bool)arg2;
-		const char* path = (const char*)arg1;
-		dprintf("Dir info is %d\n", dir_info);
-		if(dir_info) {
-			// dereferencing path is causing a page fault...
-			dprintf("Looking up %s\n", path);
-			fs::fs_node *n = vfs::get().lookup(path);
-			if(!n) {
-				return syscall_result {syscall_result_code::not_found, 0};
+		const char *path = (const char *)arg1;
+		stat_result *buff = (stat_result *)arg0;
+		// Lookup path and check if it exist
+		fs::fs_node *n = vfs::get().lookup(path);
+		if (!n) {
+			return syscall_result { syscall_result_code::not_found, 0 };
+		}
+		// Check if dir_info flag is set, and return information about
+		// path and its children if so
+		if (dir_info) {
+			// Char arrays initialised on the stack contain random vals, memset to zero to avoid
+			// returning weird contents to userland (even though we expect them to provide a clean buffer)
+			memops::memset(buff, 0, sizeof(stat_result));
+			// Safe copy the name of the node into buff, ensuring null termination for the
+			// last char in the case of long filenames
+			memops::strncpy(buff->name, n->name().c_str(), sizeof(buff->name) - 1);
+			buff->name[sizeof(buff->name) - 1] = '\0';
+			buff->kind = (u64)(n->kind());
+			if (n->kind() == fs::fs_node_kind::directory) {
+				// If we have a directory set the size to the number of children
+				buff->size_or_count = ((fs::tarfs_node *)n)->child_count();
+			} else {
+				// Else return the size of the file at this location
+				buff->size_or_count = ((fs::tarfs_node *)n)->size();
 			}
-			dprintf("Retrieved fs node for %s\n", n->name());
-			// fucking cursed lol I miss static_cast
-			stat_result *buff = (stat_result*)arg0;
-			dprintf("Buffer typecast succeeded\n");
-			if(n->kind() == fs::fs_node_kind::directory) {
-				dprintf("Node identified as directory\n");
-				stat_result res;
+			return syscall_result { syscall_result_code::ok, 0 };
+		} else {
+			// Get child count
+			u64 child_count = ((fs::tarfs_node *)n)->child_count();
+			list<tarfs_node *> *children = ((fs::tarfs_node *)n)->children();
+			memops::memset(buff, 0, sizeof(buff) * child_count);
+			// Loop over children and add their details to result
+			for (u64 i = 0; i < child_count; i++) {
+				// Get child
+				tarfs_node *child = children->at(i);
+				// Initialise temp result buffer and set
+				stat_result *res = &(buff[i]);
 				// strcpy node name into buffer and explicitly set final char to null
 				// to avoid issues where n->name is larger than res name size
-				memops::strncpy(res.name, n->name().c_str(), sizeof(res.name) - 1);
-				res.name[sizeof(res.name) - 1] = '\0';
-				dprintf("Res contains name %s\n", res.name);
-				res.size_or_count = ((fs::tarfs_node*)n)->child_count();
-				res.kind = (u64)(n->kind());
-				// memcpy result to buffer for returning
-				dprintf("About to memcpy result to buff\n");
-				memops::memcpy(buff, &res, sizeof(stat_result));
-				dprintf("Copy succeeded");
-				return syscall_result {syscall_result_code::ok, 0};
+				memops::strncpy(res->name, child->name().c_str(), sizeof(res->name) - 1);
+				res->name[sizeof(res->name) - 1] = '\0';
+				res->size_or_count = child->size();
+				res->kind = (u64)(child->kind());
 			}
-			else {
-				return syscall_result {syscall_result_code::not_supported, 0};
-			}
+			return syscall_result { syscall_result_code::ok, 0 };
 		}
 	}
 
