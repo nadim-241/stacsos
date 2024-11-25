@@ -145,8 +145,9 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 			// Get child count
 			u64 child_count = ((fs::tarfs_node *)n)->child_count();
 			list<tarfs_node *> *children = ((fs::tarfs_node *)n)->children();
+			assert(child_count == children->count());
 			memops::memset(buff, 0, sizeof(buff) * child_count);
-			// Loop over children and add their details to result
+			//  Loop over children and add their details to result
 			for (u64 i = 0; i < child_count; i++) {
 				// Get child
 				tarfs_node *child = children->at(i);
