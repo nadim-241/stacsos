@@ -142,10 +142,14 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 			}
 			return syscall_result { syscall_result_code::ok, 0 };
 		} else {
-			// Get child count
+			// Get children of path and return them
 			u64 child_count = ((fs::tarfs_node *)n)->child_count();
 			list<tarfs_node *> *children = ((fs::tarfs_node *)n)->children();
-			assert(child_count == children->count());
+			// If the user didn't provide the correct child_count return error
+			if (child_count != children->count()) {
+				return syscall_result { syscall_result_code::not_supported, 0 };
+			}
+			// Clean buffer
 			memops::memset(buff, 0, sizeof(buff) * child_count);
 			//  Loop over children and add their details to result
 			for (u64 i = 0; i < child_count; i++) {
